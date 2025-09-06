@@ -1,130 +1,130 @@
-# app.py
-
+# dashboard.py
 import streamlit as st
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.linear_model import LinearRegression
-import numpy as np
 
-# =========================
-# 1. Title & description
-# =========================
 st.set_page_config(page_title="Renewable Energy Dashboard", layout="wide")
-st.title("Renewable Energy Dashboard 🌱")
-st.markdown("""
-Dashboard interaktif untuk memantau produksi & konsumsi energi serta mengevaluasi investasi terhadap dampak lingkungan.
-""")
+st.title("Interactive Renewable Energy Dashboard (2000-2023)")
 
-# =========================
-# 2. Load dataset
-# =========================
-url = "http://raw.githubusercontent.com/Evameivina/Renewable-Energy-/refs/heads/main/energy_dataset_.csv"
-df = pd.read_csv(url)
+# ---------------------------
+# Load Data
+# ---------------------------
+@st.cache_data
+def load_data():
+    url = "https://raw.githubusercontent.com/Evameivina/Renewable-Energy-/refs/heads/main/global_renewable_energy_production.csv"
+    df = pd.read_csv(url)
+    df['Year'] = df['Year'].astype(int)
+    energy_cols = ['SolarEnergy','WindEnergy','HydroEnergy','OtherRenewableEnergy','TotalRenewableEnergy']
+    df[energy_cols] = df[energy_cols].astype(float)
+    df.fillna(0, inplace=True)
+    
+    # Perbaiki TotalEnergy
+    df['CheckTotal'] = df[['SolarEnergy','WindEnergy','HydroEnergy','OtherRenewableEnergy']].sum(axis=1)
+    inconsistent = df[df['CheckTotal'] != df['TotalRenewableEnergy']]
+    df.loc[inconsistent.index, 'TotalRenewableEnergy'] = df.loc[inconsistent.index, ['SolarEnergy','WindEnergy','HydroEnergy','OtherRenewableEnergy']].sum(axis=1)
+    return df
 
-# Hapus duplikat
-df = df.drop_duplicates()
+df = load_data()
+energy_cols = ['SolarEnergy','WindEnergy','HydroEnergy','OtherRenewableEnergy','TotalRenewableEnergy']
 
-# Bersihkan kolom & handle missing
-df.columns = [col.strip() for col in df.columns]
-df.fillna(0, inplace=True)
-
-# Mapping kode numerik ke kategori
-energy_map = {1: "Solar", 2: "Wind", 3: "Hydroelectric", 4: "Geothermal",
-              5: "Biomass", 6: "Tidal", 7: "Wave"}
-grid_map = {1: "Fully Integrated", 2: "Partially Integrated",
-            3: "Minimal Integration", 4: "Isolated Microgrid"}
-funding_map = {1: "Government", 2: "Private", 3: "Public-Private Partnership"}
-
-df['Type_of_Renewable_Energy'] = df['Type_of_Renewable_Energy'].map(energy_map)
-df['Grid_Integration_Level'] = df['Grid_Integration_Level'].map(grid_map)
-df['Funding_Sources'] = df['Funding_Sources'].map(funding_map)
-
-# Fokus kolom
-fokus_cols = ['Type_of_Renewable_Energy', 
-              'Energy_Production_MWh', 'Energy_Consumption_MWh',
-              'Initial_Investment_USD', 'GHG_Emission_Reduction_tCO2e',
-              'Air_Pollution_Reduction_Index', 'Funding_Sources']
-df = df[fokus_cols]
-
-# =========================
-# 3. Sidebar - Filters
-# =========================
-st.sidebar.header("Filters")
-energy_options = st.sidebar.multiselect(
-    "Pilih jenis energi:",
-    options=df['Type_of_Renewable_Energy'].unique(),
-    default=df['Type_of_Renewable_Energy'].unique()
+# ---------------------------
+# Sidebar - Filter Interaktif
+# ---------------------------
+st.sidebar.header("Filter Options")
+selected_countries = st.sidebar.multiselect(
+    "Select Countries",
+    df['Country'].unique(),
+    default=['USA','China']
+)
+selected_energy = st.sidebar.selectbox(
+    "Select Energy Type",
+    energy_cols
+)
+year_range = st.sidebar.slider(
+    "Select Year Range",
+    int(df['Year'].min()),
+    int(df['Year'].max()),
+    (2000, 2023)
 )
 
-funding_options = st.sidebar.multiselect(
-    "Pilih sumber pendanaan:",
-    options=df['Funding_Sources'].unique(),
-    default=df['Funding_Sources'].unique()
-)
+filtered_df = df[
+    (df['Country'].isin(selected_countries)) &
+    (df['Year'] >= year_range[0]) &
+    (df['Year'] <= year_range[1])
+]
 
-filtered_df = df[(df['Type_of_Renewable_Energy'].isin(energy_options)) &
-                 (df['Funding_Sources'].isin(funding_options))]
+# ---------------------------
+# Dataset & Statistik
+# ---------------------------
+st.subheader("Filtered Dataset")
+st.dataframe(filtered_df.reset_index(drop=True))
 
-# =========================
-# 4. Fokus 1: Tren Produksi & Konsumsi Energi
-# =========================
-st.subheader("Tren Produksi & Konsumsi Energi")
-st.markdown("Line chart produksi & konsumsi energi per jenis energi.")
+st.subheader("Descriptive Statistics")
+st.write(filtered_df[energy_cols].describe())
 
-plt.figure(figsize=(12,6))
-for energy in filtered_df['Type_of_Renewable_Energy'].unique():
-    temp = filtered_df[filtered_df['Type_of_Renewable_Energy'] == energy]
-    plt.plot(temp['Energy_Production_MWh'].values, label=f"{energy} Production")
-    plt.plot(temp['Energy_Consumption_MWh'].values, label=f"{energy} Consumption")
+# ---------------------------
+# Visualization - Trend Line
+# ---------------------------
+st.subheader(f"{selected_energy} Trend")
+fig, ax = plt.subplots(figsize=(12,6))
+for country in selected_countries:
+    country_data = filtered_df[filtered_df['Country']==country]
+    sns.lineplot(x='Year', y=selected_energy, data=country_data, marker='o', label=country, ax=ax)
+ax.set_ylabel("Energy Production (GWh)")
+ax.set_title(f"{selected_energy} Production ({year_range[0]}-{year_range[1]})")
+ax.grid(True)
+ax.legend()
+st.pyplot(fig)
 
-plt.xlabel("Record Index")
-plt.ylabel("MWh")
-plt.title("Energy Production vs Consumption")
-plt.legend()
-st.pyplot(plt)
+# ---------------------------
+# Visualization - Total Energy Comparison
+# ---------------------------
+st.subheader(f"Total {selected_energy} per Country ({year_range[0]}-{year_range[1]})")
+total_energy = filtered_df.groupby('Country')[selected_energy].sum().sort_values(ascending=False)
+fig2, ax2 = plt.subplots(figsize=(12,5))
+total_energy.plot(kind='bar', color='skyblue', ax=ax2)
+ax2.set_ylabel("Energy Production (GWh)")
+ax2.set_title(f"Total {selected_energy} per Country")
+ax2.grid(True)
+st.pyplot(fig2)
 
-# Forecasting sederhana untuk satu jenis energi (misal Solar)
-if "Solar" in filtered_df['Type_of_Renewable_Energy'].unique():
-    st.markdown("Prediksi produksi Solar 5 periode ke depan:")
-    forecast_df = filtered_df[filtered_df['Type_of_Renewable_Energy']=="Solar"]
-    X = np.array(range(len(forecast_df))).reshape(-1,1)
-    y = forecast_df['Energy_Production_MWh'].values
-    model = LinearRegression()
-    model.fit(X, y)
-    future_index = np.array(range(len(X), len(X)+5)).reshape(-1,1)
-    y_pred_future = model.predict(future_index)
-    st.write(y_pred_future)
+# ---------------------------
+# Forecasting - Linear Regression
+# ---------------------------
+st.subheader(f"Forecast {selected_energy} (Global)")
 
-# =========================
-# 5. Fokus 2: Investasi vs Dampak Lingkungan
-# =========================
-st.subheader("Investasi vs Dampak Lingkungan")
-st.markdown("Scatter plot investasi terhadap pengurangan emisi dan polusi udara.")
+global_energy = df.groupby('Year')[selected_energy].sum().reset_index()
+X = global_energy[['Year']]
+y = global_energy[selected_energy]
+model = LinearRegression()
+model.fit(X, y)
 
-plt.figure(figsize=(10,6))
-sns.scatterplot(data=filtered_df,
-                x='Initial_Investment_USD',
-                y='GHG_Emission_Reduction_tCO2e',
-                hue='Type_of_Renewable_Energy',
-                style='Funding_Sources',
-                s=100)
-plt.xlabel("Initial Investment (USD)")
-plt.ylabel("GHG Emission Reduction (tCO2e)")
-plt.title("Investment vs GHG Emission Reduction")
-st.pyplot(plt)
+future_years = pd.DataFrame({'Year':[2024,2025,2026,2027,2028]})
+pred = model.predict(future_years)
+forecast_df = pd.DataFrame({'Year': future_years['Year'], f'Predicted_{selected_energy}': pred})
 
-plt.figure(figsize=(10,6))
-sns.scatterplot(data=filtered_df,
-                x='Initial_Investment_USD',
-                y='Air_Pollution_Reduction_Index',
-                hue='Type_of_Renewable_Energy',
-                style='Funding_Sources',
-                s=100)
-plt.xlabel("Initial Investment (USD)")
-plt.ylabel("Air Pollution Reduction Index")
-plt.title("Investment vs Air Pollution Reduction")
-st.pyplot(plt)
+st.dataframe(forecast_df)
 
+# Plot actual + forecast
+fig3, ax3 = plt.subplots(figsize=(12,6))
+sns.lineplot(x='Year', y=selected_energy, data=global_energy, marker='o', label='Actual', ax=ax3)
+sns.lineplot(x='Year', y=f'Predicted_{selected_energy}', data=forecast_df, marker='o', label='Forecast', ax=ax3)
+ax3.set_ylabel("Energy Production (GWh)")
+ax3.set_title(f"Global {selected_energy} Forecast")
+ax3.grid(True)
+ax3.legend()
+st.pyplot(fig3)
 
+# ---------------------------
+# Correlation Heatmap
+# ---------------------------
+st.subheader("Correlation Between Energy Types")
+fig4, ax4 = plt.subplots(figsize=(8,5))
+sns.heatmap(df[energy_cols].corr(), annot=True, cmap="coolwarm", ax=ax4)
+st.pyplot(fig4)
+
+st.markdown("Dashboard ini interaktif: pilih negara, jenis energi, dan range tahun untuk melihat tren, perbandingan total, dan prediksi energi terbarukan global.")
 

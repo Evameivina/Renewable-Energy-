@@ -19,7 +19,7 @@ Dashboard interaktif untuk memantau produksi & konsumsi energi serta mengevaluas
 # =========================
 # 2. Load dataset
 # =========================
-url = "https://raw.githubusercontent.com/username/repo/main/renewable_energy.csv"  # ganti sesuai repo
+url = "https://github.com/Evameivina/Renewable-Energy-/blob/main/energy_dataset_.csv"
 df = pd.read_csv(url)
 
 # Hapus duplikat
@@ -125,3 +125,4 @@ plt.xlabel("Initial Investment (USD)")
 plt.ylabel("Air Pollution Reduction Index")
 plt.title("Investment vs Air Pollution Reduction")
 st.pyplot(plt)
+

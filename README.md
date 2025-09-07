@@ -22,3 +22,7 @@ Berikan rekomendasi berbasis data untuk kebijakan dan strategi energi.
 ### Solution Statement
 
 Lakukan pembersihan data, eksplorasi, dan visualisasi; buat analisis insight dan dashboard interaktif untuk memudahkan pemangku kepentingan memahami tren dan distribusi energi terbarukan.
+
+**Akses Dashboard**
+
+https://dashboardenergydata.streamlit.app/
